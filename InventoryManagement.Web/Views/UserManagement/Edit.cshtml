@@ -1,0 +1,406 @@
+﻿@model EditUserViewModel
+@{
+    ViewData["Title"] = "Edit User";
+}
+
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mt-4">Edit User</h1>
+            <ol class="breadcrumb mb-4">
+                <li class="breadcrumb-item"><a href="/Home/Dashboard">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="@Url.Action("Index")">User Management</a></li>
+                <li class="breadcrumb-item active">Edit User</li>
+            </ol>
+        </div>
+        <div>
+            <a href="@Url.Action("Index")" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Users
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-user-edit"></i> User Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Edit" method="post">
+                        @Html.AntiForgeryToken()
+                        <input asp-for="Id" type="hidden" />
+                        <input asp-for="Username" type="hidden" />
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label class="form-label">Username</label>
+                                    <input value="@Model.Username" class="form-control" readonly disabled />
+                                    <div class="form-text">Username cannot be changed.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="Email" class="form-label">Email <span class="text-danger">*</span></label>
+                                    <input asp-for="Email" class="form-control" placeholder="Enter email address" />
+                                    <span asp-validation-for="Email" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="FirstName" class="form-label">First Name <span class="text-danger">*</span></label>
+                                    <input asp-for="FirstName" class="form-control" placeholder="Enter first name" />
+                                    <span asp-validation-for="FirstName" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label asp-for="LastName" class="form-label">Last Name <span class="text-danger">*</span></label>
+                                    <input asp-for="LastName" class="form-control" placeholder="Enter last name" />
+                                    <span asp-validation-for="LastName" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label class="form-label">Status</label>
+                                    <div class="form-check">
+                                        <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                                        <label asp-for="IsActive" class="form-check-label">
+                                            Active User
+                                        </label>
+                                    </div>
+                                    <div class="form-text">Inactive users cannot login to the system.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label class="form-label">Roles</label>
+                                    <div class="role-selection border rounded p-3">
+                                        @{
+                                            // Add a hidden field to ensure we always send role data
+                                            <input type="hidden" name="RoleUpdateFlag" value="true" />
+                                        }
+                                        @foreach (var role in Model.AvailableRoles)
+                                        {
+                                            <div class="form-check mb-2">
+                                                <input type="checkbox"
+                                                       class="form-check-input role-checkbox"
+                                                       name="SelectedRoles"
+                                                       value="@role.Value"
+                                                       id="role_@role.Value"
+                                                       @(Model.CurrentRoles.Contains(role.Value) ? "checked" : "") />
+                                                <label class="form-check-label" for="role_@role.Value">
+                                                    @role.Text
+                                                    @if (Model.CurrentRoles.Contains(role.Value))
+                                                    {
+                                                        <small class="text-muted">(Current)</small>
+                                                    }
+                                                </label>
+                                            </div>
+                                        }
+                                        <!-- Hidden field to track original roles -->
+                                        @foreach (var role in Model.CurrentRoles)
+                                        {
+                                            <input type="hidden" name="CurrentRoles" value="@role" />
+                                        }
+                                    </div>
+                                    <div class="form-text">
+                                        Select one or more roles for this user. Changes will be applied immediately upon save.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="@Url.Action("Index")" class="btn btn-secondary me-md-2">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Update User
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-shield-alt"></i> User Permissions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <input type="text" id="permissionSearch" class="form-control form-control-sm"
+                               placeholder="Search permissions...">
+                    </div>
+
+                    <div id="permissionsContainer" style="max-height: 500px; overflow-y: auto;">
+                        <div class="text-center">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <div class="card shadow mt-4">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-lock"></i> Password Management
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid">
+                        <a href="@Url.Action("ResetPassword", new { id = Model.Id })" class="btn btn-outline-warning">
+                            <i class="fas fa-key"></i> Reset Password
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+@section Scripts {
+    <script>
+        let allPermissions = [];
+        let originalPermissions = {};
+
+        $(document).ready(function() {
+            loadUserPermissions();
+
+                    $('#permissionSearch').on('keyup', function() {
+                const searchTerm = $(this).val().toLowerCase();
+                $('.permission-item').each(function() {
+                    const text = $(this).text().toLowerCase();
+                    $(this).toggle(text.includes(searchTerm));
+                });
+            });
+        });
+
+                async function loadUserPermissions() {
+            try {
+                // Call the MVC controller action directly (no API gateway needed)
+                const url = '/UserManagement/GetUserPermissions?id=@Model.Id';
+
+                $.ajax({
+                    url: url,
+                    type: 'GET',
+                    // For MVC controller actions, we don't need the Bearer token
+                    // The cookie authentication handles it automatically
+                    success: function(data) {
+                        console.log('Permissions loaded successfully:', data);
+
+                        if (data.error) {
+                            $('#permissionsContainer').html(
+                                '<p class="text-danger">Failed to load permissions</p>'
+                            );
+                            return;
+                        }
+                        renderPermissions(data);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Failed to load permissions:', xhr.status, error);
+
+                        let errorMessage = 'Error loading permissions';
+                        if (xhr.status === 401) {
+                            errorMessage = 'Session expired. Please refresh the page.';
+                        } else if (xhr.status === 403) {
+                            errorMessage = 'You do not have permission to view user permissions.';
+                        }
+
+                        $('#permissionsContainer').html(
+                            `<p class="text-danger">${errorMessage}</p>`
+                        );
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading permissions:', error);
+                $('#permissionsContainer').html(
+                    '<p class="text-danger">Error loading permissions. Please refresh the page.</p>'
+                );
+            }
+        }
+
+        function renderPermissions(permissions) {
+            // Group permissions by category
+            const grouped = {};
+            permissions.forEach(p => {
+                const category = p.category || 'General';
+                if (!grouped[category]) {
+                    grouped[category] = [];
+                }
+                grouped[category].push(p);
+            });
+
+            let html = '<div class="permissions-list">';
+
+            // Show assigned permissions first
+            const assignedPerms = permissions.filter(p => p.isAssigned);
+            if (assignedPerms.length > 0) {
+                html += `
+                    <div class="mb-4">
+                        <h6 class="text-success mb-3">
+                            <i class="fas fa-check-circle"></i> Current Permissions (${assignedPerms.length})
+                        </h6>
+                        <div class="assigned-permissions">
+                `;
+
+                assignedPerms.forEach(perm => {
+                    html += createPermissionItem(perm, true);
+                });
+
+                html += '</div></div>';
+            }
+
+            // Show available permissions by category
+            html += '<h6 class="text-primary mb-3"><i class="fas fa-plus-circle"></i> Available Permissions</h6>';
+
+            for (const [category, perms] of Object.entries(grouped)) {
+                const availableInCategory = perms.filter(p => !p.isAssigned);
+                if (availableInCategory.length === 0) continue;
+
+                html += `
+                    <div class="category-section mb-3">
+                        <div class="category-header">${category}</div>
+                        <div class="category-permissions">
+                `;
+
+                availableInCategory.forEach(perm => {
+                    html += createPermissionItem(perm, false);
+                });
+
+                html += '</div></div>';
+            }
+
+            html += '</div>';
+            $('#permissionsContainer').html(html);
+        }
+
+        function createPermissionItem(permission, isAssigned) {
+            const action = isAssigned ? 'remove' : 'add';
+            const buttonClass = isAssigned ? 'btn-danger' : 'btn-success';
+            const buttonIcon = isAssigned ? 'fa-times' : 'fa-plus';
+            const buttonText = isAssigned ? 'Remove' : 'Add';
+
+            return `
+                <div class="permission-item ${isAssigned ? 'assigned' : 'available'}" data-name="${permission.name}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="permission-info">
+                            <div class="permission-name">${permission.name}</div>
+                            <small class="text-muted">${permission.description || 'No description'}</small>
+                        </div>
+                        <button class="btn btn-sm ${buttonClass}"
+                                onclick="togglePermission('${permission.name}', ${!isAssigned})"
+                                title="${buttonText} permission">
+                            <i class="fas ${buttonIcon}"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function togglePermission(permissionName, isGranting) {
+            const action = isGranting ? 'grant' : 'remove';
+            const message = `Are you sure you want to ${action} the "${permissionName}" permission?`;
+
+            if (!confirm(message)) {
+                return; // User cancelled the action
+            }
+
+            try {
+                // Get the authentication token securely
+                const token = await SecureTokenProvider.getToken();
+
+                // Build the proper API URL
+                const endpoint = isGranting ? 'grant-permission' : 'revoke-permission';
+                const apiUrl = AppConfig.buildApiUrl(`auth/users/@Model.Id/${endpoint}`);
+
+                $.ajax({
+                    url: apiUrl,
+                    type: 'POST',
+                    data: JSON.stringify({
+                        permissionName: permissionName
+                    }),
+                    contentType: 'application/json',
+                    headers: {
+                        'Authorization': `Bearer ${token}`, // FIX 6: Added missing comma
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(response) {
+                        showToast(`Permission ${action}ed successfully`, 'success');
+                        // Reload the permissions list to show the updated state
+                        loadUserPermissions();
+                    },
+                    error: function(xhr) {
+                        console.error('Failed to toggle permission:', xhr);
+
+                        const errorMsg = xhr.responseJSON?.message ||
+                                       xhr.responseJSON?.error ||
+                                       `Failed to ${action} permission`;
+                        showToast(errorMsg, 'error');
+                    }
+                });
+            } catch (error) {
+                console.error('Error getting authentication token:', error);
+                showToast('Authentication error. Please refresh the page.', 'error');
+            }
+        }
+    </script>
+}
+
+<style>
+    .permissions-list {
+        padding: 10px;
+    }
+
+    .permission-item {
+        padding: 10px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+        border: 1px solid #e0e0e0;
+        transition: all 0.2s;
+    }
+
+        .permission-item.assigned {
+            background-color: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .permission-item.available:hover {
+            background-color: #f5f5f5;
+            border-color: #2196f3;
+        }
+
+    .permission-name {
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+
+    .category-section {
+        margin-bottom: 20px;
+    }
+
+    .category-header {
+        font-weight: 600;
+        color: #666;
+        padding: 8px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        margin-bottom: 10px;
+    }
+</style>

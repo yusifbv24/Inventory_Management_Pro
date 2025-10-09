@@ -1,0 +1,648 @@
+﻿@model PagedResultDto<RouteViewModel>
+@{
+    ViewData["Title"] = "Routes";
+    var currentSearch = ViewBag.CurrentSearch as string ?? null;
+}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Routes</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="/Home/Dashboard">Dashboard</a></li>
+        <li class="breadcrumb-item active">Routes</li>
+    </ol>
+
+    <div class="card mb-4 shadow">
+        <div class="card-header">
+            <div class="row g-3">
+                <div class="col md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="searchInput" class="form-control border-start-0"
+                               name="search" value="@currentSearch"
+                               placeholder="Search by code, category, department..." />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-calendar"></i></span>
+                        <input type="text" id="dateRange" class="form-control"
+                               placeholder="Select date range" />
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select id="statusFilter" class="form-select">
+                        @{
+                            var falseSelection = ViewBag.CurrentFilter == false ? "selected" : "";
+                            var trueSelection = ViewBag.CurrentFilter == true ? "selected" : "";
+                        }
+                        <option value="">All Status</option>
+                        <option value="false" falseSelection>Pending</option>
+                        <option value="true" trueSelection>Completed</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" onclick="applyRouteFilters()">
+                        <i class="fas fa-filter"></i> Apply
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4 shadow">
+        <div class="card-header">
+            <div class="row align-items-center">
+                <div class="col">
+                    <partial name="_RoutePagination" model="Model" />
+                </div>
+                <div class="col-auto">
+                    @if (User.HasPermission("route.create") || User.HasPermission("route.create.direct"))
+                    {
+                        <a asp-action="Transfer" class="btn btn-primary btn-sm">
+                            <i class="fas fa-exchange-alt"></i> New Transfer
+                        </a>
+                    }
+                    <button class="btn btn-outline-secondary btn-sm" onclick="exportRoutesToPDF()">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </button>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <a asp-action="Index" asp-route-isCompleted="" class="btn btn-outline-secondary @(ViewBag.CurrentFilter == null ? "active" : "")">
+                            All
+                        </a>
+                        <a asp-action="Index" asp-route-isCompleted="false" class="btn btn-outline-warning @(ViewBag.CurrentFilter == false ? "active" : "")">
+                            Pending
+                        </a>
+                        <a asp-action="Index" asp-route-isCompleted="true" class="btn btn-outline-success @(ViewBag.CurrentFilter == true ? "active" : "")">
+                            Completed
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Items.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="routesTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px;">Image</th>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Product</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Status</th>
+                                    <th class="actions-column">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routesTableBody">
+                                @foreach (var route in Model.Items)
+                                {
+                                    <tr data-search="@($"{route.InventoryCode} {route.Model} {route.Vendor} {route.FromDepartmentName} {route.ToDepartmentName}".ToLower())">
+                                        <td class="text-center">
+                                            @if (!string.IsNullOrEmpty(route.ImageUrl))
+                                            {
+                                                <img src="@($"{route.FullImageUrl}")"
+                                                     class="img-thumbnail route-image"
+                                                     style="width: 60px; height: 60px; object-fit: cover; cursor: pointer;"
+                                                     onclick="showImageModal('@($"{route.FullImageUrl}")', 'Route @route.Id')"
+                                                     alt="Route Image">
+                                            }
+                                            else
+                                            {
+                                                <div class="no-image-placeholder">
+                                                    <i class="fas fa-image text-muted"></i>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small>
+                                                @route.CreatedAt.ToString("dd/MM/yyyy")<br />
+                                                @route.CreatedAt.ToString("HH:mm")
+                                            </small>
+                                        </td>
+                                        <td>
+                                            @{
+                                                var typeColor = route.RouteTypeName switch
+                                                {
+                                                    "New" => "bg-success",
+                                                    "Existing" => "bg-primary",
+                                                    "Transfer" => "bg-info",
+                                                    "Update" => "bg-warning",
+                                                    "Removal" => "bg-danger",
+                                                    _ => "bg-secondary"
+                                                };
+                                            }
+                                            <span class="badge @typeColor">@route.RouteTypeName</span>
+                                        </td>
+                                        <td>
+                                            @if(route.RouteTypeName!="Removal")
+                                            {
+                                                <a asp-controller="Products" asp-action="Details" 
+                                                   asp-route-id="@route.ProductId"
+                                                   class="text-decoration-none">
+                                                    <span class="badge bg-primary">@route.InventoryCode</span>
+                                                    @route.Vendor
+                                                </a>
+                                                <br />
+                                            }
+                                            else
+                                            {
+                                                <div class="text-decoration-none">
+                                                    <span class="badge bg-primary">@route.InventoryCode</span>
+                                                    @route.Vendor
+                                                </div>
+                                            }
+                                            <small class="text-muted">
+                                                <i class="fas fa-tag"></i> @route.CategoryName
+                                            </small>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(route.FromDepartmentName))
+                                            {
+                                                <div>@route.FromDepartmentName</div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(route.FromWorker))
+                                            {
+                                                <small class="text-muted">
+                                                    <i class="fas fa-user"></i> @(route.FromWorker)
+                                                </small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(route.ToDepartmentName))
+                                            {
+                                                <div>@route.ToDepartmentName</div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(route.ToWorker))
+                                            {
+                                                <small class="text-muted">
+                                                    <i class="fas fa-user"></i> @(route.ToWorker)
+                                                </small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (route.IsCompleted)
+                                            {
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check-circle"></i> Completed
+                                                </span>
+                                                @if (route.CompletedAt.HasValue)
+                                                {
+                                                    <br />
+                                                    <small class="text-muted">@route.CompletedAt.Value.ToString("dd/MM HH:mm")</small>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning">
+                                                    <i class="fas fa-clock"></i> Pending Transfer
+                                                </span>
+                                                <br />
+                                                <small class="text-muted">
+                                                    Created: @route.CreatedAt.ToString("MM/dd/yyyy HH:mm")
+                                                </small>
+                                            }
+                                        </td>
+                                        <td class="actions-column">
+                                            <div class="btn-group" role="group">
+                                                <a asp-action="Details" asp-route-id="@route.Id"
+                                                   class="btn btn-sm btn-outline-info" title="View Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                @if ((User.HasPermission("route.update") || User.HasPermission("route.update.direct")) && !route.IsCompleted)
+                                                {
+                                                    <a asp-action="Edit" asp-route-id="@route.Id"
+                                                       class="btn btn-sm btn-outline-warning" title="Edit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                }
+
+                                                @if ((User.HasPermission("route.complete") && !route.IsCompleted))
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-success"
+                                                            onclick="completeRoute(@route.Id)" title="Complete">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                }
+
+                                                @if (User.HasPermission("route.delete") && !route.IsCompleted)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            onclick="deleteRoute(@route.Id)" title="Delete">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                }
+
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <i class="fas fa-route fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No routes found</p>
+                        <a asp-action="Transfer" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Create First Route
+                        </a>
+                    </div>
+                }
+            </div>
+            <div class="card-footer">
+                <partial name="_RoutePagination" model="Model" />
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Hidden form for CSRF token -->
+    <form id="csrfForm" style="display: none;">
+        @Html.AntiForgeryToken()
+    </form>
+
+</div>
+
+@section Scripts {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="~/js/pdf-export.js" asp-append-version="true"></script>
+    <script>
+            function exportRouteToPDF() {
+                // Create a new PDF document
+                const doc = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'mm'
+                });
+
+                // Add title
+                doc.setFontSize(18);
+                doc.text('Routes Report', 105, 15, { align: 'center' });
+
+                // Add date
+                doc.setFontSize(10);
+                const today = new Date();
+                doc.text(`Generated on: ${today.toLocaleDateString()} ${today.toLocaleTimeString()}`, 105, 22, { align: 'center' });
+
+                // Define columns
+                const columns = [
+                    { title: "Date", dataKey: "date" },
+                    { title: "Type", dataKey: "type" },
+                    { title: "Inventory Code", dataKey: "inventoryCode" },
+                    { title: "Vendor", dataKey: "vendor" },
+                    { title: "Category", dataKey: "category" },
+                    { title: "From Department", dataKey: "fromDept" },
+                    { title: "To Department", dataKey: "toDept" },
+                    { title: "Status", dataKey: "status" },
+                    { title: "Completed At", dataKey: "completedAt" }
+                ];
+
+                // Extract data from table rows
+                const rows = [];
+                const tableRows = document.querySelectorAll('#routesTableBody tr');
+
+                tableRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+
+                    // Extract date
+                    const dateText = cells[1].querySelector('small').textContent.trim();
+                    const [date, time] = dateText.split('\n').map(s => s.trim());
+
+                    // Extract type
+                    const type = cells[2].textContent.trim();
+
+                    // Extract product details
+                    const productDetails = cells[3];
+                    const inventoryCode = productDetails.querySelector('.badge').textContent.trim();
+                    const vendor = productDetails.textContent.replace(inventoryCode, '').trim().split('\n')[0];
+                    const category = productDetails.querySelector('.text-muted').textContent.replace('⏏', '').trim();
+
+                    // Extract from department
+                    const fromDept = cells[4].querySelector('div').textContent.trim();
+
+                    // Extract to department
+                    const toDept = cells[5].querySelector('div').textContent.trim();
+
+                    // Extract status
+                    const statusBadge = cells[6].querySelector('.badge');
+                    let status = statusBadge.textContent.trim();
+                    let completedAt = '';
+
+                    if (status.includes('Completed')) {
+                        const completedAtText = cells[6].querySelectorAll('small')[1]?.textContent.trim() || '';
+                        completedAt = completedAtText;
+                    } else {
+                        completedAt = 'N/A';
+                    }
+
+                    // Add to rows array
+                    rows.push({
+                        date: `${date} ${time}`,
+                        type: type,
+                        inventoryCode: inventoryCode,
+                        vendor: vendor,
+                        category: category,
+                        fromDept: fromDept,
+                        toDept: toDept,
+                        status: status,
+                        completedAt: completedAt
+                    });
+                });
+
+                // Add table to PDF
+                doc.autoTable({
+                    head: [columns.map(col => col.title)],
+                    body: rows.map(row => columns.map(col => row[col.dataKey])),
+                    startY: 30,
+                    margin: { left: 10, right: 10 },
+                    styles: {
+                        fontSize: 8,
+                        cellPadding: 2,
+                        overflow: 'linebreak'
+                    },
+                    headStyles: {
+                        fillColor: [41, 128, 185],
+                        textColor: 255,
+                        fontStyle: 'bold'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [245, 245, 245]
+                    },
+                    columnStyles: {
+                        date: { cellWidth: 25 },
+                        type: { cellWidth: 15 },
+                        inventoryCode: { cellWidth: 20 },
+                        vendor: { cellWidth: 25 },
+                        category: { cellWidth: 20 },
+                        fromDept: { cellWidth: 25 },
+                        toDept: { cellWidth: 25 },
+                        status: { cellWidth: 25 },
+                        completedAt: { cellWidth: 20 }
+                    }
+                });
+
+                // Save the PDF
+                doc.save(`Routes_Report_${today.getFullYear()}${(today.getMonth()+1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}.pdf`);
+                }
+    </script>
+    <script>
+        $(document).ready(function() {
+            // Initialize date range picker
+                    $('#dateRange').daterangepicker({
+                        autoUpdateInput: false,
+                        locale: {
+                            cancelLabel: 'Clear',
+                            format: 'MM/DD/YYYY'
+                        }
+                    });
+
+                    $('#dateRange').on('apply.daterangepicker', function(ev, picker) {
+                        $(this).val(picker.startDate.format('MM/DD/YYYY') + ' - ' + picker.endDate.format('MM/DD/YYYY'));
+                    });
+
+                    $('#dateRange').on('cancel.daterangepicker', function() {
+                        $(this).val('');
+                    });
+
+                    restoreFilterValues();
+                });
+
+            // Restore filter values from URL parameters
+        function restoreFilterValues() {
+            const params = new URLSearchParams(window.location.search);
+
+            // Restore search
+            const search = params.get('search');
+            if (search) {
+                $('#searchInput').val(search);
+            }
+
+            // Restore date range
+            const startDate = params.get('startDate');
+            const endDate = params.get('endDate');
+            if (startDate && endDate) {
+                const formattedStart = moment(startDate).format('MM/DD/YYYY');
+                const formattedEnd = moment(endDate).format('MM/DD/YYYY');
+                $('#dateRange').val(formattedStart + ' - ' + formattedEnd);
+            }
+
+            // Restore status filter
+            const status = params.get('status');
+            if (status !== null) {
+                $('#statusFilter').val(status);
+            }
+        }
+
+        // Apply all filters and reload the page with query parameters
+        function applyRouteFilters() {
+            const params = new URLSearchParams();
+
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm) {
+                params.append('search', searchTerm);
+            }
+
+            // Get date range value
+            const dateRange = $('#dateRange').val();
+            if (dateRange) {
+                const dates = dateRange.split(' - ');
+                if (dates.length === 2) {
+                    const startDate = moment(dates[0], 'MM/DD/YYYY').format('YYYY-MM-DD');
+                    const endDate = moment(dates[1], 'MM/DD/YYYY').format('YYYY-MM-DD');
+                    params.append('startDate', startDate);
+                    params.append('endDate', endDate);
+                }
+            }
+
+            // Get status filter value
+            const status = $('#statusFilter').val();
+            if (status !== '') {
+                params.append('status', status);
+            }
+
+            // Maintain page size
+            params.append('pageSize', '@Model.PageSize');
+            params.append('pageNumber', '1');
+
+            // Build the URL property
+            window.location.href = '/Routes?' + params.toString();
+        }
+
+        // Make search work on Enter key
+        $('#searchInput').on('keypress', function(e) {
+            if (e.which === 13) {
+                applyRouteFilters();
+            }
+        });
+
+        function resetFilters() {
+                    $('#searchInput').val('');
+                    $('#dateRange').val('');
+                    $('#statusFilter').val('');
+                    window.location.href = '/Routes';
+                }
+
+        function formatLocalDateTime(utcDateString) {
+            const date = new Date(utcDateString);
+            return date.toLocaleString('en-US', {
+                timeZone: 'Asia/Baku', // Azerbaijan timezone
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+
+        // Change page with current filters maintained
+                function changePage(page) {
+            const params = new URLSearchParams(window.location.search);
+            params.set('pageNumber', page);
+
+            // Ensure we always have pageSize
+            if (!params.has('pageSize')) {
+                params.set('pageSize', '@Model.PageSize');
+            }
+
+            window.location.href = '/Routes?' + params.toString();
+        }
+
+        function showImageModal(imageUrl, title) {
+            $('#globalModalImage').attr('src', imageUrl);
+            $('#globalImageModal .modal-title').text(title || 'Image Preview');
+            $('#globalImageModal').modal('show');
+        }
+
+        function completeRoute(id) {
+            if (confirm('Are you sure you want to mark this route as completed?')) {
+                $.ajax({
+                    url: '/Routes/Complete/' + id,
+                    type: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('#csrfForm input[name="__RequestVerificationToken"]').value
+                    },
+                    success: function(response) {
+                        // Reload after a short delay
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1500);
+                    },
+                    error: function(xhr) {
+                        const errorMsg = ErrorHandler.parseErrorMessage(xhr, 'Failed to complete route');
+                        showToast(errorMsg, 'error');
+                    }
+                });
+            }
+        }
+        function deleteRoute(id) {
+                    if (confirm('Are you sure you want to delete this route?')) {
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = '/Routes/Delete/' + id;
+
+                        const token = document.querySelector('#csrfForm input[name="__RequestVerificationToken"]').value;
+                        const tokenInput = document.createElement('input');
+                        tokenInput.type = 'hidden';
+                        tokenInput.name = '__RequestVerificationToken';
+                        tokenInput.value = token;
+
+                        form.appendChild(tokenInput);
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                }
+    </script>
+    <script>
+        // Real-time search functionality
+        let searchTimeout;
+        const searchInput = document.getElementById('searchInput');
+        const searchForm = document.getElementById('searchForm');
+
+        if (searchInput && searchForm) {
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+
+                // Show loading indicator
+                const submitBtn = searchForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Searching...';
+                }
+
+                searchTimeout = setTimeout(() => {
+                    searchForm.submit();
+                }, 500); // Wait 500ms after user stops typing
+            });
+        }
+
+        // Update the showing text dynamically
+        function updateShowingText() {
+            const totalCount = @(ViewBag.TotalCount ?? 0);
+            const showingStart = @(ViewBag.ShowingStart ?? 0);
+            const showingEnd = @(ViewBag.ShowingEnd ?? 0);
+
+            const showingText = document.querySelector('.showing-text');
+            if (showingText) {
+                if (totalCount === 0) {
+                    showingText.textContent = 'No routes found';
+                } else {
+                    showingText.textContent = `Showing ${showingStart}-${showingEnd} of ${totalCount} routes`;
+                }
+            }
+        }
+
+        // Call on page load
+        document.addEventListener('DOMContentLoaded', updateShowingText);
+    </script>
+    <style>
+        .route-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .no-image-placeholder {
+            width: 60px;
+            height: 60px;
+            background-color: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+
+        .gmail-pagination {
+            font-size: 0.875rem;
+        }
+
+        .pagination-controls .btn {
+            padding: 0.25rem 0.5rem;
+            margin: 0 0.125rem;
+        }
+        #routesTable{
+            font-weight:normal;
+        }
+    
+        #routesTable tbody tr {
+            font-weight: normal; /* Ensure body rows are normal weight */
+        }
+    
+        /* Additional styles matching products view */
+        #routesTable tbody td {
+            vertical-align: middle;
+            font-weight: 400;
+        }
+    </style>
+}

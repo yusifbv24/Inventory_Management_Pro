@@ -1,0 +1,657 @@
+﻿@model PagedResultDto<ProductViewModel>
+@{
+    ViewData["Title"] = "Products";
+    var currentSearch = ViewBag.CurrentSearch as string ?? null;
+}
+
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Products</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="/Home/Dashboard">Dashboard</a></li>
+        <li class="breadcrumb-item active">Products</li>
+    </ol>
+
+    <div class="card mb-4 shadow">
+        <div class="card-header">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="searchInput" class="form-control border-start-0"
+                               value="@currentSearch" name="search"
+                               placeholder="Search by code, model, vendor..." />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-calendar"></i></span>
+                        <input type="text" id="dateRange" class="form-control"
+                               placeholder="Select date range" />
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select id="statusFilter" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="true">Working</option>
+                        <option value="false">Not Working</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="availabilityFilter" class="form-select">
+                        <option value="">All</option>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-primary w-100" onclick="applyProductFilters()">
+                        <i class="fas fa-filter"></i> Apply
+                    </button>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-outline-secondary w-100" onclick="resetProductFilters()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4 shadow">
+        <div class="card-header">
+            <div class="row align-items-center">
+                <div class="col">
+                    <partial name="_ProductPagination" model="Model" />
+                </div>
+                <div class="col-auto">
+                    @if (User.HasPermission("product.create") || User.HasPermission("product.create.direct"))
+                    {
+                        <a asp-action="Create" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> New Product
+                        </a>
+                    }
+                    <button class="btn btn-outline-secondary btn-sm" onclick="exportProductsToPDF()">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (Model.Items.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" id="productsTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">Image</th>
+                                <th>Code</th>
+                                <th>Product Details</th>
+                                <th>Location</th>
+                                <th>Status</th>
+                                <th style="width: 120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in Model.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(product.ImageUrl))
+                                        {
+                                            <img src="@product.FullImageUrl" class="img-thumbnail"
+                                                 style="width: 60px; height: 60px; object-fit: cover; cursor: pointer;"
+                                                 onclick="showImageModal('@product.FullImageUrl','@product.CategoryName')"
+                                                 alt="@product.CategoryName">
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                                <i class="fas fa-image text-muted"></i>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary fs-6 inventory-code-display" data-id="@product.Id">
+                                            @product.InventoryCode
+                                        </span>
+                                        <div class="inventory-code-edit d-none" data-id="@product.Id">
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" class="form-control form-control-sm inventory-code-input"
+                                                       value="@product.InventoryCode" min="1" max="9999" data-id="@product.Id">
+                                                <button class="btn btn-success btn-sm save-inventory-code" data-id="@product.Id">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                                <button class="btn btn-secondary btn-sm cancel-inventory-code" data-id="@product.Id">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>@product.Model</strong>
+                                            <small class="text-muted">by @product.Vendor</small>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-tag"></i> @product.CategoryName
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <i class="fas fa-building"></i> @product.DepartmentName
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(product.Worker))
+                                        {
+                                            <small class="text-muted">
+                                                <i class="fas fa-user"></i> @product.Worker
+                                            </small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1 flex-wrap">
+                                            @if (product.IsWorking)
+                                            {
+                                                <span class="badge bg-success">Working</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">Not Working</span>
+                                            }
+                                            @if (product.IsActive)
+                                            {
+                                                <span class="badge bg-secondary">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">Inactive</span>
+                                            }
+                                            @if (product.HasPendingApproval)
+                                            {
+                                                <span class="badge bg-warning">
+                                                    <i class="fas fa-clock"></i> Pending Approval
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a asp-action="Details" asp-route-id="@product.Id" class="btn btn-sm btn-outline-info" title="View">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            @if(User.HasPermission("product.update") || User.HasPermission("product.update.direct"))
+                                            {
+                                                <a asp-action="Edit" asp-route-id="@product.Id" class="btn btn-sm btn-outline-warning" title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                            }
+                                            @if(User.HasPermission("product.delete") || User.HasPermission("product.delete.direct"))
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteProduct(@product.Id)" title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No products found in inventory</p>
+                    <a asp-action="Create" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add First Product
+                    </a>
+                </div>
+            }
+        </div>
+        <div class="card-footer">
+            <partial name="_ProductPagination" model="Model" />
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this product?</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Note:</strong> This action may require approval from an administrator.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="confirmDeleteBtn" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Delete Product
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="~/js/pdf-export.js" asp-append-version="true"></script>
+    <script>
+        let currentDeleteProductId = null;
+        // Initialize date range picker when document is ready
+        $(document).ready(function() {
+            // Initialize date range picker with proper configuration
+            $('#dateRange').daterangepicker({
+                autoUpdateInput: false,
+                locale: {
+                    cancelLabel: 'Clear',
+                    format: 'MM/DD/YYYY'
+                },
+                opens: 'left'
+            });
+
+            // Handle date range selection
+            $('#dateRange').on('apply.daterangepicker', function(ev, picker) {
+                $(this).val(picker.startDate.format('MM/DD/YYYY') + ' - ' + picker.endDate.format('MM/DD/YYYY'));
+            });
+
+            // Handle clear button
+            $('#dateRange').on('cancel.daterangepicker', function(ev, picker) {
+                $(this).val('');
+            });
+
+            // Restore filter values from query parameters
+            restoreFilterValues();
+        });
+
+        // Restore filter values from URL parameters
+        function restoreFilterValues() {
+            const params = new URLSearchParams(window.location.search);
+
+            // Restore search
+            const search = params.get('search');
+            if (search) {
+                $('#searchInput').val(search);
+            }
+
+            // Restore date range
+            const startDate = params.get('startDate');
+            const endDate = params.get('endDate');
+            if (startDate && endDate) {
+                const formattedStart = moment(startDate).format('MM/DD/YYYY');
+                const formattedEnd = moment(endDate).format('MM/DD/YYYY');
+                $('#dateRange').val(formattedStart + ' - ' + formattedEnd);
+            }
+
+            // Restore status filter
+            const status = params.get('status');
+            if (status !== null) {
+                $('#statusFilter').val(status);
+            }
+
+            // Restore availability filter
+            const availability = params.get('availability');
+            if (availability !== null) {
+                $('#availabilityFilter').val(availability);
+            }
+        }
+
+        // Apply all filters and reload the page with query parameters
+        function applyProductFilters() {
+            const params = new URLSearchParams();
+
+            const searchTerm = $('#searchInput').val().trim();
+            if (searchTerm) {
+                params.append('search', searchTerm);
+            }
+
+            // Get date range value
+            const dateRange = $('#dateRange').val();
+            if (dateRange) {
+                const dates = dateRange.split(' - ');
+                if (dates.length === 2) {
+                    const startDate = moment(dates[0], 'MM/DD/YYYY').format('YYYY-MM-DD');
+                    const endDate = moment(dates[1], 'MM/DD/YYYY').format('YYYY-MM-DD');
+                    params.append('startDate', startDate);
+                    params.append('endDate', endDate);
+                }
+            }
+
+            // Get status filter value
+            const status = $('#statusFilter').val();
+            if (status !== '') {
+                params.append('status', status);
+            }
+
+            // Get availability filter value
+            const availability = $('#availabilityFilter').val();
+            if (availability !== '') {
+                params.append('availability', availability);
+            }
+
+            // Maintain page size
+            params.append('pageSize', '@Model.PageSize');
+            params.append('pageNumber', '1');
+
+            // Build the URL property
+            window.location.href = '/Products?' + params.toString();
+        }
+
+        // Make search work on Enter key
+        $('#searchInput').on('keypress', function(e) {
+            if (e.which === 13) {
+                applyProductFilters();
+            }
+        });
+
+        // Reset all filters and reload the page
+        function resetProductFilters() {
+            $('#searchInput').val('');
+            $('#dateRange').val('');
+            $('#statusFilter').val('');
+            $('#availabilityFilter').val('');
+            window.location.href = '/Products?pageSize=@Model.PageSize&pageNumber=1';
+        }
+
+        // Change page with current filters maintained
+        function changePage(page) {
+            const params = new URLSearchParams(window.location.search);
+            params.set('pageNumber', page);
+
+            // Ensure we always have pageSize
+            if (!params.has('pageSize')) {
+                params.set('pageSize', '@Model.PageSize');
+            }
+
+            window.location.href = '/Products?' + params.toString();
+        }
+
+        // Delete product confirmation
+        function deleteProduct(id) {
+            currentDeleteProductId = id;
+            $('#deleteModal').modal('show');
+        }
+
+                // Handle the delete confirmation
+        $('#confirmDeleteBtn').on('click', function() {
+            const $btn = $(this);
+            const originalHtml = $btn.html();
+
+            // Show loading state
+            $btn.prop('disabled', true)
+                .html('<span class="spinner-border spinner-border-sm me-2"></span>Deleting...');
+
+            // Perform AJAX delete request
+            $.ajax({
+                url: `/Products/Delete/${currentDeleteProductId}`,
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    // First, check if this went to approval
+                    if (response.isApprovalRequest) {
+                        // Product deletion requires approval
+                        $('#deleteModal').modal('hide');
+
+                        // Show detailed approval notification
+                        showToast(
+                            response.message || 'Product deletion has been submitted for approval. An administrator will review your request.',
+                            'info',
+                            8000
+                        );
+
+                        // Add a visual indicator to the product row
+                        const $productRow = $(`tr:has(button[onclick="deleteProduct(${currentDeleteProductId})"])`);
+                        if ($productRow.length) {
+                            // Add pending badge to the status column
+                            const $statusCell = $productRow.find('td:nth-child(5)'); // Adjust based on your table structure
+                            $statusCell.append('<span class="badge bg-warning ms-1"><i class="fas fa-clock"></i> Deletion Pending</span>');
+
+                            // Disable the action buttons
+                            $productRow.find('.btn-group button').prop('disabled', true).addClass('opacity-50');
+                        }
+
+                        // Optionally show a more prominent notification
+                        if (response.approvalRequestId) {
+                            showApprovalRequestInfo(response.approvalRequestId);
+                        }
+
+                    } 
+                    else if (response.isSuccess !== false) {
+                        // Product was deleted successfully (direct deletion)
+                        $('#deleteModal').modal('hide');
+
+                        showToast('Product deleted successfully', 'success');
+
+                        // Remove the product row with animation
+                        const $productRow = $(`tr:has(button[onclick="deleteProduct(${currentDeleteProductId})"])`);
+                        $productRow.fadeOut(500, function() {
+                            $(this).remove();
+
+                            // Check if table is now empty
+                            if ($('#productsTable tbody tr').length === 0) {
+                                location.reload(); // Reload to show empty state
+                            }
+                        });
+
+                        // Update the product count if displayed
+                        updateProductCount(-1);
+
+                    } 
+                    else {
+                        // Deletion failed
+                        showToast(
+                            response.message || 'Failed to delete product. Please try again.',
+                            'error'
+                        );
+
+                        // Keep modal open for retry
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }
+                },
+                error: function(xhr) {
+                    // Handle different error scenarios
+                    let errorMessage = 'An error occurred while deleting the product';
+
+                    if (xhr.status === 401) {
+                        errorMessage = 'Your session has expired. Please login again.';
+                        setTimeout(() => window.location.href = '/Account/Login', 2000);
+                    } else if (xhr.status === 403) {
+                        errorMessage = 'You do not have permission to delete this product.';
+                    } else if (xhr.status === 409) {
+                        errorMessage = 'This product cannot be deleted because it has associated routes or transfers.';
+                    } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+
+                    showToast(errorMessage, 'error', 7000);
+
+                    // Re-enable the button for retry
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        });
+
+                // Helper function to show approval request details
+        function showApprovalRequestInfo(requestId) {
+            const infoHtml = `
+                <div class="alert alert-info alert-dismissible fade show position-fixed"
+                     style="top: 100px; right: 20px; z-index: 9999; max-width: 400px;">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-info-circle me-2"></i>Approval Request Created
+                    </h6>
+                    <p class="mb-2">Your deletion request has been submitted with ID: <strong>#${requestId}</strong></p>
+                    <small class="text-muted">You can track the status in the My Requests section.</small>
+                    <hr class="my-2">
+                    <div class="d-flex gap-2">
+                        <a href="/Approvals/MyRequests" class="btn btn-sm btn-info">
+                            <i class="fas fa-list me-1"></i>View My Requests
+                        </a>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="alert">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            $('body').append(infoHtml);
+
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                $('.alert-info[style*="position: fixed"]').fadeOut(500, function() {
+                    $(this).remove();
+                });
+            }, 10000);
+        }
+
+        function updateProductCount(change) {
+            const $countElement = $('.showing-text');
+            if ($countElement.length) {
+                const currentText = $countElement.text();
+                const match = currentText.match(/of (\d+) products/);
+                if (match) {
+                    const currentTotal = parseInt(match[1]);
+                    const newTotal = Math.max(0, currentTotal + change);
+                    $countElement.text(currentText.replace(/of \d+ products/, `of ${newTotal} products`));
+                }
+            }
+        }
+
+        $('#deleteModal').on('keydown', function(e) {
+            if (e.key === 'Escape') {
+                $(this).modal('hide');
+            }
+        });
+
+        // Reset when modal is hidden
+        $('#deleteModal').on('hidden.bs.modal', function() {
+            currentDeleteProductId = null;
+            $('#confirmDeleteBtn').prop('disabled', false)
+                .html('<i class="fas fa-trash me-2"></i>Delete Product');
+        });
+
+        // Double-click to edit inventory code
+        $(document).on('dblclick', '.inventory-code-display', function() {
+            const id = $(this).data('id');
+            $(this).addClass('d-none');
+            $(`.inventory-code-edit[data-id="${id}"]`).removeClass('d-none');
+            $(`.inventory-code-input[data-id="${id}"]`).focus().select();
+        });
+
+        // Save inventory code
+        $(document).on('click', '.save-inventory-code', function() {
+            const id = $(this).data('id');
+            const newCode = $(`.inventory-code-input[data-id="${id}"]`).val();
+
+            if (newCode < 1 || newCode > 9999) {
+                showToast('Inventory code must be between 1 and 9999', 'error');
+                return;
+            }
+
+            const $btn = $(this);
+            const originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.ajax({
+                url: '/Products/UpdateInventoryCode',
+                type: 'POST',
+                data: JSON.stringify({
+                    id: id,
+                    inventoryCode: parseInt(newCode)
+                }),
+                contentType: 'application/json',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function() {
+                    $(`.inventory-code-display[data-id="${id}"]`).text(newCode).removeClass('d-none');
+                    $(`.inventory-code-edit[data-id="${id}"]`).addClass('d-none');
+                    showToast('Inventory code updated successfully', 'success');
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON?.error || 'Failed to update inventory code';
+                    showToast(errorMsg, 'error');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        });
+
+        // Cancel inventory code edit
+        $(document).on('click', '.cancel-inventory-code', function() {
+            const id = $(this).data('id');
+            $(`.inventory-code-display[data-id="${id}"]`).removeClass('d-none');
+            $(`.inventory-code-edit[data-id="${id}"]`).addClass('d-none');
+        });
+
+        // Keyboard shortcuts for inventory code editing
+        $(document).on('keydown', '.inventory-code-input', function(e) {
+            const id = $(this).data('id');
+            if (e.which === 13) { // Enter key
+                e.preventDefault();
+                $(`.save-inventory-code[data-id="${id}"]`).click();
+            } else if (e.which === 27) { // Escape key
+                $(`.cancel-inventory-code[data-id="${id}"]`).click();
+            }
+        });
+
+        // Show image modal
+        function showImageModal(imageUrl, title) {
+            $('#globalModalImage').attr('src', imageUrl);
+            $('#globalImageModal .modal-title').text(title || 'Image Preview');
+            $('#globalImageModal').modal('show');
+        }
+    </script>
+    <script>
+        // Real-time search functionality
+        let searchTimeout;
+        const searchInput = document.getElementById('searchInput');
+        const searchForm = document.getElementById('searchForm');
+
+        if (searchInput && searchForm) {
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+
+                // Show loading indicator
+                const submitBtn = searchForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Searching...';
+                }
+
+                searchTimeout = setTimeout(() => {
+                    searchForm.submit();
+                }, 500); // Wait 500ms after user stops typing
+            });
+        }
+
+        // Update the showing text dynamically
+        function updateShowingText() {
+            const totalCount = @(ViewBag.TotalCount ?? 0);
+            const showingStart = @(ViewBag.ShowingStart ?? 0);
+            const showingEnd = @(ViewBag.ShowingEnd ?? 0);
+
+            const showingText = document.querySelector('.showing-text');
+            if (showingText) {
+                if (totalCount === 0) {
+                    showingText.textContent = 'No products found';
+                } else {
+                    showingText.textContent = `Showing ${showingStart}-${showingEnd} of ${totalCount} products`;
+                }
+            }
+        }
+
+        // Call on page load
+        document.addEventListener('DOMContentLoaded', updateShowingText);
+    </script>
+}

@@ -1,0 +1,544 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] ?? "Inventory Pro")</title>
+
+    <!-- Modern Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/modern-ui.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+
+</head>
+<body>
+    <div class="layout-wrapper" id="wrapper">
+        <!-- Sidebar -->
+        @if (User.Identity?.IsAuthenticated ?? false)
+        {
+            <partial name="_Sidebar" />
+            <!-- Overlay for mobile -->
+            <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+        }
+
+        <!-- Main Content -->
+        <div class="main-content" id="page-content-wrapper">
+            <!-- Modern Top Navigation -->
+            <nav class="navbar navbar-expand-lg navbar-light top-navbar">
+                <div class="container-fluid px-4">
+                    <div class="d-flex align-items-center">
+                        @if (User.Identity?.IsAuthenticated ?? false)
+                        {
+                            <button class="btn btn-link sidebar-toggle" id="menu-toggle">
+                                <i class="fas fa-bars"></i>
+                            </button>
+                        }
+
+                        <div class="navbar-brand-wrapper">
+                            <a class="navbar-brand" href="/">
+                                <span class="brand-text">Inventory Pro</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="navbar-nav ms-auto d-flex align-items-center">
+                        @if (User.Identity?.IsAuthenticated ?? false)
+                        {
+                            <div class="nav-item dropdown me-3">
+                                <a class="nav-link notification-toggle" href="#" id="notificationIcon"
+                                   data-bs-toggle="dropdown">
+                                    <div class="icon-badge">
+                                        <i class="far fa-bell"></i>
+                                        <span id="notificationBadge" class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle"
+                                              style="display:none; font-size: 0.65rem; padding: 0.25em 0.5em;">
+                                        </span>
+                                    </div>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-end notification-dropdown modern-dropdown">
+                                    <div class="dropdown-header">
+                                        <h6 class="mb-0">Notifications</h6>
+                                        <a href="/Notifications" class="text-primary">View All</a>
+                                    </div>
+                                    <div id="notificationList" class="notification-list">
+                                        <div class="text-center py-3">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-footer">
+                                        <a href="#" id="markAllAsRead" class="text-muted">
+                                            Mark all as read
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- User Menu -->
+                            <div class="nav-item dropdown">
+                                <a class="nav-link user-menu-toggle" href="#" id="userDropdown"
+                                   data-bs-toggle="dropdown">
+                                    <div class="user-avatar">
+                                        <span>@User.Identity.Name?.Substring(0, 1).ToUpper()</span>
+                                    </div>
+                                    <span class="user-name d-none d-md-inline ms-2">@User.Identity.Name</span>
+                                    <i class="fas fa-chevron-down ms-1 small"></i>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end modern-dropdown">
+                                    <li>
+                                        <a class="dropdown-item" href="/Account/Profile">
+                                            <i class="fas fa-user-circle me-2"></i> My Profile
+                                        </a>
+                                    </li>
+                                    @if (User.IsInRole("Admin"))
+                                    {
+                                        <li>
+                                            <a class="dropdown-item" href="/Approvals">
+                                                <i class="fas fa-check-circle me-2"></i> Approvals
+                                                <span class="badge bg-warning ms-auto" id="pendingApprovalsCount"></span>
+                                            </a>
+                                        </li>
+                                    }
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form asp-controller="Account" asp-action="Logout" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="fas fa-sign-out-alt me-2"></i> Sign Out
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                @RenderBody()
+            </div>
+
+            <!-- Modern Footer -->
+            <footer class="modern-footer">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <span class="text-muted">© @DateTime.Today.Year Inventory Pro. All rights reserved.</span>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    </div>
+
+    <!-- Global Image Modal -->
+    <div class="modal fade" id="globalImageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 900px;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Image Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center p-0" style="max-height: 70vh; overflow: auto;">
+                    <img id="globalModalImage" class="img-fluid" alt="Preview"
+                         style="max-width: 100%; max-height: 65vh; width: auto; height: auto;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.0/signalr.min.js"></script>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/app-config.js" asp-append-version="true"></script>
+    <script src="~/js/token-provider.js" asp-append-version="true"></script>
+    <script src="~/js/notification-manager.js" asp-append-version="true"></script>
+
+    @if (User.IsInRole("Admin"))
+    {
+        <script src="~/js/admin-approvals.js" asp-append-version="true"></script>
+    }
+    <script>
+        // Initialize application when document is ready
+        $(document).ready(function() {
+            // Initialize sidebar toggle
+            $('#menu-toggle').click(function(e) {
+                e.preventDefault();
+                $('body').toggleClass('sidebar-toggled');
+                $('#wrapper').toggleClass('toggled');
+
+                if ($('#wrapper').hasClass('toggled')) {
+                    $('.main-content').css('margin-left', '0');
+                } else {
+                    $('.main-content').css('margin-left', 'var(--sidebar-width)');
+                }
+            });
+
+                // Pass the admin status to the notification manager
+                const isAdmin = @(User.IsInRole("Admin") ? "true" : "false");
+
+                    // Initialize the notification system
+                NotificationManager.initialize(isAdmin);
+
+                // Set up UI handlers for notifications
+                setupNotificationUIHandlers();
+
+                // Load initial data
+                loadNotificationCount();
+                loadRecentNotifications();
+
+                if (isAdmin) {
+                    loadPendingApprovalsCountFromAPI();
+                }
+        });
+
+        // Notification UI Handlers (separated from the manager)
+        function setupNotificationUIHandlers() {
+            // Handle notification icon click
+            $('#notificationIcon').on('click', function(e) {
+                e.preventDefault();
+                loadRecentNotifications();
+            });
+
+            // Handle mark all as read
+            $('#markAllAsRead').on('click', function(e) {
+                e.preventDefault();
+                markAllNotificationsAsRead();
+            });
+
+            // Handle individual notification clicks
+            $(document).on('click', '.notification-item', function() {
+                const notificationId = $(this).data('id');
+                if (notificationId) {
+                    markNotificationAsRead(notificationId);
+                }
+            });
+        }
+
+        // Notification UI Functions (keep these global for access from notification-manager)
+        window.loadNotificationCount = function() {
+            $.ajax({
+                url: '/Notifications/GetUnreadCount',
+                type: 'GET',
+                success: function(count) {
+                    console.log('Loaded notification count:', count);
+                    updateNotificationBadge(count);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load notification count:', error);
+                }
+            });
+        };
+
+
+
+         window.loadRecentNotifications = function() {
+            $('#notificationList').html(`
+                <div class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            `);
+
+            $.ajax({
+                url: '/Notifications/GetRecentNotifications',
+                type: 'GET',
+                success: function(notifications) {
+                    console.log('Loaded notifications:', notifications.length);
+                    renderNotifications(notifications);
+
+                    // Also update the count after loading notifications
+                    loadNotificationCount();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to load notifications:', error);
+                    $('#notificationList').html(`
+                        <div class="notification-empty">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p class="mb-0">Failed to load notifications</p>
+                        </div>
+                    `);
+                }
+            });
+        };
+
+        window.loadPendingApprovalsCountFromAPI = function() {
+         // This function calls the actual implementation from admin-approvals.js
+            if (typeof loadPendingApprovalsCount === 'function') {
+            loadPendingApprovalsCount();
+            }
+        };
+
+         window.incrementNotificationCount = function() {
+            $.ajax({
+                url: '/Notifications/GetUnreadCount',
+                type: 'GET',
+                success: function(count) {
+                    updateNotificationBadge(count);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to get current count:', error);
+                    // Fallback: try to increment from current displayed value
+                    const $badge = $('#notificationBadge');
+                    const currentText = $badge.text().trim();
+
+                    if (currentText && currentText !== '99+') {
+                        const current = parseInt(currentText) || 0;
+                        updateNotificationBadge(current + 1);
+                    } else {
+                        // If we can't determine current count, just show indicator
+                        updateNotificationBadge(1);
+                    }
+                }
+            });
+        };
+
+        window.playNotificationSound = function() {
+            try {
+                const audio = new Audio('/sounds/notify.mp3');
+                audio.volume = 0.5;
+
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('Could not play notification sound:', error);
+                    });
+                }
+            } catch (error) {
+                console.error('Error playing notification sound:', error);
+            }
+        };
+
+        window.getNotificationType = function(type) {
+            const types = {
+                'ApprovalRequest': 'warning',
+                'ApprovalResponse': 'success',
+                'ProductUpdate': 'info',
+                'RouteUpdate': 'info',
+                'RouteCompleted': 'success',
+                'TransferCompleted': 'success',
+                'System': 'secondary'
+            };
+            return types[type] || 'info';
+        };
+
+        // Helper Functions
+        function renderNotifications(notifications) {
+            let html = '';
+
+            if (!notifications || notifications.length === 0) {
+                html = `
+                    <div class="notification-empty">
+                        <i class="fas fa-bell-slash"></i>
+                        <p class="mb-0">No new notifications</p>
+                    </div>
+                `;
+            } else {
+                notifications.forEach(function(notification) {
+                    html += createNotificationItem(notification);
+                });
+            }
+
+            $('#notificationList').html(html);
+        }
+
+        function createNotificationItem(notification) {
+            const timeAgo = formatTimeAgo(notification.createdAt);
+            const unreadClass = notification.isRead ? '' : 'unread';
+            const icon = getNotificationIcon(notification.type);
+            const iconColor = getNotificationIconColor(notification.type);
+
+            return `
+                <div class="notification-item ${unreadClass}" data-id="${notification.id}">
+                    <div class="d-flex align-items-start">
+                        <div class="notification-icon ${iconColor} me-3">
+                            <i class="${icon} text-white"></i>
+                        </div>
+                        <div class="notification-content">
+                            <h6>${escapeHtml(notification.title)}</h6>
+                            <p>${escapeHtml(notification.message)}</p>
+                            <div class="notification-time">
+                                <i class="fas fa-clock me-1"></i>
+                                ${timeAgo}
+                                ${!notification.isRead ? '<span class="notification-dot ms-2"></span>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function markNotificationAsRead(notificationId) {
+            $.ajax({
+                url: '/Notifications/MarkAsRead',
+                type: 'POST',
+                data: JSON.stringify(notificationId),
+                contentType: 'application/json',
+                headers: {
+                    'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').first().val()
+                },
+                success: function(response) {
+                    $(`.notification-item[data-id="${notificationId}"]`).removeClass('unread');
+                    loadNotificationCount();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to mark notification as read:', error);
+                }
+            });
+        }
+
+        function markAllNotificationsAsRead() {
+            const token = $('input[name="__RequestVerificationToken"]').first().val();
+
+            $.ajax({
+                url: '/Notifications/MarkAllAsRead',
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': token
+                },
+                success: function(response) {
+                    console.log('✅ All notifications marked as read');
+
+                    // Remove unread class from all items
+                    $('.notification-item').removeClass('unread');
+                    $('.notification-dot').remove();
+
+                    updateNotificationBadge(0);
+
+                    $('#sidebarUnreadCount').text('0').hide();
+                    $('.sidebar-nav .notification-badge').hide();
+
+                    // FIX: Update any other notification indicators
+                    $('.nav-link[href="/Notifications"] .badge').text('0').hide();
+
+                    // FIXED: Force reload the notification list to get fresh data
+                    setTimeout(function() {
+                        loadRecentNotifications();
+                        loadNotificationCount(); // FIX: Also reload the count from server
+                    }, 300);
+
+                    showToast('All notifications marked as read', 'success');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Failed to mark all as read:', error);
+                    showToast('Failed to mark notifications as read', 'error');
+                }
+            });
+        }
+
+        function updateNotificationBadge(count) {
+            count = parseInt(count) || 0;
+            console.log('Updating notification badges to:', count);
+
+            // List of all possible notification badge selectors
+            const badgeSelectors = [
+                '#notificationBadge',
+                '#sidebarUnreadCount',
+                '.sidebar-nav .notification-badge',
+                '.nav-link[href="/Notifications"] .badge',
+                '[data-notification-count]'
+            ];
+
+            badgeSelectors.forEach(selector => {
+                const $element = $(selector);
+                if ($element.length) {
+                    if (count > 0) {
+                        const displayCount = count > 99 ? '99+' : count;
+                        $element.text(displayCount).show();
+
+                        // Use appropriate display style
+                        if ($element.hasClass('badge')) {
+                            $element.css('display', 'inline-flex');
+                        }
+                    } else {
+                        $element.hide().text('');
+                    }
+                }
+            });
+        }
+
+
+        function getNotificationIcon(type) {
+            const icons = {
+                'ApprovalRequest': 'fas fa-clock',
+                'ApprovalResponse': 'fas fa-check-circle',
+                'ProductUpdate': 'fas fa-box',
+                'RouteUpdate': 'fas fa-route',
+                'RouteCompleted': 'fas fa-check-double',
+                'TransferCompleted': 'fas fa-exchange-alt',
+                'System': 'fas fa-info-circle'
+            };
+            return icons[type] || 'fas fa-bell';
+        }
+
+
+        function getNotificationIconColor(type) {
+            const colors = {
+                'ApprovalRequest': 'bg-warning',
+                'ApprovalResponse': 'bg-success',
+                'ProductUpdate': 'bg-info',
+                'RouteUpdate': 'bg-primary',
+                'RouteCompleted': 'bg-success',
+                'TransferCompleted': 'bg-success',
+                'System': 'bg-secondary'
+            };
+            return colors[type] || 'bg-primary';
+        }
+
+        function formatTimeAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffSecs < 60) return 'just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 30) return `${diffDays}d ago`;
+
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text ? text.replace(/[&<>"']/g, m => map[m]) : '';
+        }
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
